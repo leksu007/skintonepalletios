@@ -227,12 +227,13 @@ function showResults(analysis, palette) {
 document.addEventListener('DOMContentLoaded', () => {
   initPaletteSelector();
 
-  document.getElementById('btn-exit').addEventListener('click', () => {
-    window.close();
-    // window.close() doesn't always work in standalone PWAs — fallback
-    setTimeout(() => {
-      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#a0a0b0;font-family:sans-serif;text-align:center;padding:20px"><p>You can now swipe up to close the app.</p></div>';
-    }, 300);
+  document.querySelectorAll('.exit-app-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      window.close();
+      setTimeout(() => {
+        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#a0a0b0;font-family:sans-serif;text-align:center;padding:20px"><p>You can now swipe up to close the app.</p></div>';
+      }, 300);
+    });
   });
 
   document.getElementById('btn-start').addEventListener('click', startCamera);
