@@ -197,6 +197,7 @@ function capturePhoto() {
 
 let capturedCanvas = null;
 let detectedDominantColor = null;
+let baseLab = null; // original Lab values for slider adjustments
 
 function showColorPicker(canvas) {
   capturedCanvas = canvas;
@@ -209,67 +210,67 @@ function showColorPicker(canvas) {
   }
 
   detectedDominantColor = allColors[0];
+  baseLab = detectedDominantColor.lab.slice(); // copy
 
-  // Show detected color
-  const colorDisplay = document.getElementById('detected-color-large');
-  colorDisplay.style.backgroundColor = detectedDominantColor.hex;
+  // Show original color
+  document.getElementById('original-color-preview').style.backgroundColor = detectedDominantColor.hex;
+  document.getElementById('adjusted-color-preview').style.backgroundColor = detectedDominantColor.hex;
 
-  // Generate and show variations
-  const variations = generateColorVariations(detectedDominantColor.rgb);
-  const container = document.getElementById('color-variations');
-  container.innerHTML = '';
-
-  for (const v of variations) {
-    const item = document.createElement('button');
-    item.className = 'color-variation-item';
-    item.innerHTML = `
-      <div class="variation-circle" style="background-color: ${v.hex}"></div>
-      <span class="variation-label">${v.label}</span>
-    `;
-    item.addEventListener('click', () => {
-      runAnalysisWithColor(v);
-    });
-    container.appendChild(item);
-  }
+  // Reset sliders
+  document.getElementById('slider-temp').value = 0;
+  document.getElementById('slider-light').value = 0;
+  document.getElementById('slider-sat').value = 0;
 
   showScreen('screen-color-pick');
 }
 
-function runAnalysisWithColor(colorObj) {
-  const loading = document.getElementById('loading');
-  loading.classList.remove('hidden');
+function getAdjustedColor() {
+  const tempVal = parseInt(document.getElementById('slider-temp').value);
+  const lightVal = parseInt(document.getElementById('slider-light').value);
+  const satVal = parseInt(document.getElementById('slider-sat').value);
 
-  setTimeout(() => {
-    const palette = getPaletteByKey(selectedPaletteKey);
+  let L = baseLab[0];
+  let a = baseLab[1];
+  let b = baseLab[2];
 
-    const dominantColors = [{
-      rgb: colorObj.rgb,
-      hex: colorObj.hex,
-      lab: colorObj.lab || rgbToLab(colorObj.rgb[0], colorObj.rgb[1], colorObj.rgb[2]),
-      percentage: 100
-    }];
+  // Lightness: shift L by up to ±25
+  L = Math.max(0, Math.min(100, L + lightVal * 0.25));
 
-    const analysis = analyzeColors(dominantColors, palette, selectedPaletteKey);
-    showResults(analysis, palette);
+  // Temperature: warm shifts toward yellow (increase b, slight increase a)
+  // cool shifts toward blue (decrease b, slight decrease a)
+  const tempShift = tempVal * 0.25;
+  b = b + tempShift;
+  a = a + tempShift * 0.3;
 
-    loading.classList.add('hidden');
-    showScreen('screen-results');
-  }, 100);
+  // Saturation: scale chroma (a and b) up or down
+  const satFactor = 1 + satVal * 0.008; // range: 0.2 to 1.8
+  a = a * satFactor;
+  b = b * satFactor;
+
+  const rgb = labToRgb(L, a, b);
+  const hex = rgbToHex(rgb[0], rgb[1], rgb[2]);
+  const lab = [L, a, b];
+
+  return { rgb, hex, lab };
 }
 
-// --- Analysis (with detected color) ---
+function updateColorPreview() {
+  const adjusted = getAdjustedColor();
+  document.getElementById('adjusted-color-preview').style.backgroundColor = adjusted.hex;
+}
 
-function runAnalysis() {
+function runAnalysisWithAdjusted() {
   const loading = document.getElementById('loading');
   loading.classList.remove('hidden');
 
   setTimeout(() => {
     const palette = getPaletteByKey(selectedPaletteKey);
+    const adjusted = getAdjustedColor();
 
     const dominantColors = [{
-      rgb: detectedDominantColor.rgb,
-      hex: detectedDominantColor.hex,
-      lab: detectedDominantColor.lab,
+      rgb: adjusted.rgb,
+      hex: adjusted.hex,
+      lab: adjusted.lab,
       percentage: 100
     }];
 
@@ -397,8 +398,18 @@ document.addEventListener('DOMContentLoaded', () => {
     showColorPicker(canvas);
   });
 
-  document.getElementById('btn-use-detected').addEventListener('click', () => {
-    runAnalysis();
+  // Color correction sliders — update preview in real-time
+  ['slider-temp', 'slider-light', 'slider-sat'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateColorPreview);
+  });
+
+  document.getElementById('btn-use-color').addEventListener('click', runAnalysisWithAdjusted);
+
+  document.getElementById('btn-reset-sliders').addEventListener('click', () => {
+    document.getElementById('slider-temp').value = 0;
+    document.getElementById('slider-light').value = 0;
+    document.getElementById('slider-sat').value = 0;
+    updateColorPreview();
   });
 
   document.getElementById('btn-retake').addEventListener('click', startCamera);
