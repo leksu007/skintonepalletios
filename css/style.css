@@ -130,6 +130,14 @@ body {
   cursor: pointer;
 }
 
+.app-version {
+  text-align: center;
+  font-size: 11px;
+  color: rgba(160, 160, 176, 0.5);
+  margin-top: 20px;
+  padding-bottom: 8px;
+}
+
 .btn-exit {
   background: transparent;
   color: var(--text-muted);
