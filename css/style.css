@@ -378,6 +378,18 @@ optgroup {
   color: var(--text-muted);
 }
 
+.verdict-feedback {
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 8px;
+  color: var(--warning);
+  font-style: italic;
+}
+
+.verdict-bad .verdict-feedback {
+  color: var(--bad);
+}
+
 .best-palettes {
   margin-top: 12px;
   padding-top: 12px;
@@ -500,6 +512,49 @@ optgroup {
 .distance {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.color-feedback {
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.color-feedback.feedback-great { color: var(--great); }
+.color-feedback.feedback-ok { color: var(--ok); }
+.color-feedback.feedback-warning { color: var(--warning); }
+.color-feedback.feedback-bad { color: var(--bad); }
+
+.color-dimensions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.dim-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.dim-temp {
+  background: rgba(255, 165, 2, 0.15);
+  color: var(--ok);
+}
+
+.dim-value {
+  background: rgba(176, 196, 222, 0.15);
+  color: #b0c4de;
+}
+
+.dim-chroma {
+  background: rgba(186, 85, 211, 0.15);
+  color: #ba55d3;
 }
 
 .color-best-palette {

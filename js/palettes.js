@@ -445,6 +445,129 @@ const PALETTES = {
   }
 };
 
+// --- Season Profiles ---
+// Each season's expected color dimensions based on seasonal color analysis theory.
+// temperature: -1 (cool) to +1 (warm)
+// value: 0 (dark) to 1 (light)
+// chroma: 0 (muted) to 1 (bright)
+// primary/secondary: the two dominant characteristics (weighted heavier in scoring)
+// neighbors: adjacent seasons in the flow model
+
+const SEASON_PROFILES = {
+  "light-spring": {
+    name: "Light Spring",
+    primary: "light",
+    secondary: "warm",
+    temperature: { ideal: 0.35, min: 0.0, max: 0.7 },
+    value: { ideal: 0.75, min: 0.5, max: 0.95 },
+    chroma: { ideal: 0.55, min: 0.3, max: 0.8 },
+    neighbors: ["warm-spring", "light-summer"]
+  },
+  "warm-spring": {
+    name: "Warm Spring",
+    primary: "warm",
+    secondary: "bright",
+    temperature: { ideal: 0.7, min: 0.3, max: 1.0 },
+    value: { ideal: 0.6, min: 0.3, max: 0.85 },
+    chroma: { ideal: 0.65, min: 0.35, max: 0.95 },
+    neighbors: ["light-spring", "clear-spring", "warm-autumn"]
+  },
+  "clear-spring": {
+    name: "Clear Spring",
+    primary: "bright",
+    secondary: "warm",
+    temperature: { ideal: 0.4, min: 0.0, max: 0.8 },
+    value: { ideal: 0.55, min: 0.2, max: 0.9 },
+    chroma: { ideal: 0.8, min: 0.55, max: 1.0 },
+    neighbors: ["warm-spring", "clear-winter"]
+  },
+  "light-summer": {
+    name: "Light Summer",
+    primary: "light",
+    secondary: "cool",
+    temperature: { ideal: -0.25, min: -0.6, max: 0.1 },
+    value: { ideal: 0.75, min: 0.55, max: 0.95 },
+    chroma: { ideal: 0.35, min: 0.1, max: 0.55 },
+    neighbors: ["light-spring", "cool-summer"]
+  },
+  "cool-summer": {
+    name: "Cool Summer",
+    primary: "cool",
+    secondary: "muted",
+    temperature: { ideal: -0.5, min: -1.0, max: 0.0 },
+    value: { ideal: 0.5, min: 0.2, max: 0.8 },
+    chroma: { ideal: 0.4, min: 0.15, max: 0.6 },
+    neighbors: ["light-summer", "soft-summer", "cool-winter"]
+  },
+  "soft-summer": {
+    name: "Soft Summer",
+    primary: "muted",
+    secondary: "cool",
+    temperature: { ideal: -0.2, min: -0.6, max: 0.15 },
+    value: { ideal: 0.45, min: 0.2, max: 0.7 },
+    chroma: { ideal: 0.25, min: 0.05, max: 0.45 },
+    neighbors: ["cool-summer", "soft-autumn"]
+  },
+  "soft-autumn": {
+    name: "Soft Autumn",
+    primary: "muted",
+    secondary: "warm",
+    temperature: { ideal: 0.2, min: -0.15, max: 0.55 },
+    value: { ideal: 0.45, min: 0.2, max: 0.7 },
+    chroma: { ideal: 0.25, min: 0.05, max: 0.45 },
+    neighbors: ["soft-summer", "warm-autumn"]
+  },
+  "warm-autumn": {
+    name: "Warm Autumn",
+    primary: "warm",
+    secondary: "muted",
+    temperature: { ideal: 0.65, min: 0.3, max: 1.0 },
+    value: { ideal: 0.45, min: 0.2, max: 0.7 },
+    chroma: { ideal: 0.4, min: 0.15, max: 0.6 },
+    neighbors: ["soft-autumn", "deep-autumn", "warm-spring"]
+  },
+  "deep-autumn": {
+    name: "Deep Autumn",
+    primary: "dark",
+    secondary: "warm",
+    temperature: { ideal: 0.45, min: 0.1, max: 0.8 },
+    value: { ideal: 0.25, min: 0.05, max: 0.5 },
+    chroma: { ideal: 0.5, min: 0.2, max: 0.75 },
+    neighbors: ["warm-autumn", "deep-winter"]
+  },
+  "deep-winter": {
+    name: "Deep Winter",
+    primary: "dark",
+    secondary: "cool",
+    temperature: { ideal: -0.35, min: -0.8, max: 0.1 },
+    value: { ideal: 0.2, min: 0.0, max: 0.45 },
+    chroma: { ideal: 0.55, min: 0.25, max: 0.85 },
+    neighbors: ["deep-autumn", "cool-winter"]
+  },
+  "cool-winter": {
+    name: "Cool Winter",
+    primary: "cool",
+    secondary: "bright",
+    temperature: { ideal: -0.55, min: -1.0, max: 0.0 },
+    value: { ideal: 0.4, min: 0.05, max: 0.85 },
+    chroma: { ideal: 0.7, min: 0.4, max: 1.0 },
+    neighbors: ["deep-winter", "clear-winter", "cool-summer"]
+  },
+  "clear-winter": {
+    name: "Clear Winter",
+    primary: "bright",
+    secondary: "cool",
+    temperature: { ideal: -0.4, min: -0.9, max: 0.1 },
+    value: { ideal: 0.45, min: 0.05, max: 0.9 },
+    chroma: { ideal: 0.8, min: 0.55, max: 1.0 },
+    neighbors: ["cool-winter", "clear-spring"]
+  }
+};
+
+function getSeasonProfile(key) {
+  return SEASON_PROFILES[key] || null;
+}
+
 // Build lookup map including aliases
 function getPaletteByKey(key) {
   return PALETTES[key] || null;

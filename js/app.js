@@ -160,7 +160,7 @@ function runAnalysis(canvas) {
       c.percentage = Math.round((c.percentage / total) * 100);
     });
 
-    const analysis = analyzeColors(dominantColors, palette);
+    const analysis = analyzeColors(dominantColors, palette, selectedPaletteKey);
     showResults(analysis, palette);
 
     loading.classList.add('hidden');
@@ -185,6 +185,17 @@ function showResults(analysis, palette) {
   document.getElementById('verdict-icon').innerHTML = icons[analysis.overallLevel] || icons.ok;
   document.getElementById('verdict-text').textContent = analysis.overallVerdict;
   document.getElementById('verdict-palette').textContent = 'Your palette: ' + palette.name;
+
+  // Show dimension feedback for overall verdict
+  const feedbackEl = document.getElementById('verdict-feedback');
+  if (feedbackEl) {
+    if (analysis.overallFeedback && analysis.overallLevel !== 'great') {
+      feedbackEl.textContent = analysis.overallFeedback;
+      feedbackEl.className = 'verdict-feedback';
+    } else {
+      feedbackEl.textContent = '';
+    }
+  }
 
   // Show best palettes recommendation
   const bestPalettesEl = document.getElementById('best-palettes');
@@ -233,6 +244,12 @@ function showResults(analysis, palette) {
       <div class="color-verdict">
         <span class="badge badge-${result.level}">${result.verdict}</span>
         <span class="distance">Distance: ${result.distance}</span>
+      </div>
+      ${result.feedback ? `<div class="color-feedback feedback-${result.level}">${result.feedback}</div>` : ''}
+      <div class="color-dimensions">
+        <span class="dim-tag dim-temp" title="Temperature">${result.dimensions.temperature > 0.1 ? 'Warm' : result.dimensions.temperature < -0.1 ? 'Cool' : 'Neutral'}</span>
+        <span class="dim-tag dim-value" title="Value">${result.dimensions.value > 0.65 ? 'Light' : result.dimensions.value < 0.35 ? 'Dark' : 'Medium'}</span>
+        <span class="dim-tag dim-chroma" title="Chroma">${result.dimensions.chroma > 0.55 ? 'Bright' : result.dimensions.chroma < 0.3 ? 'Muted' : 'Moderate'}</span>
       </div>
       <div class="color-best-palette">Best for: ${result.bestPalette.name}</div>
     `;

@@ -60,6 +60,98 @@ function hexToLab(hex) {
   return rgbToLab(r, g, b);
 }
 
+// --- Color Dimension Analysis ---
+// Analyzes a color's temperature (warm/cool), value (light/dark), chroma (bright/muted)
+
+function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  let h = 0;
+  if (delta > 0) {
+    if (max === r) h = 60 * (((g - b) / delta) % 6);
+    else if (max === g) h = 60 * ((b - r) / delta + 2);
+    else h = 60 * ((r - g) / delta + 4);
+  }
+  if (h < 0) h += 360;
+
+  const s = max === 0 ? 0 : delta / max;
+  const v = max;
+  return [h, s, v];
+}
+
+function colorTemperature(r, g, b) {
+  // Returns -1.0 (fully cool/blue) to +1.0 (fully warm/yellow)
+  // Based on article: warm = yellow-based, cool = blue-based
+  const [h, s, v] = rgbToHsv(r, g, b);
+
+  // Low saturation or very dark/light = neutral temperature
+  if (s < 0.05) return 0;
+
+  // Hue-based temperature assessment
+  // Warm hues: ~10-75° (red-orange-yellow-yellow-green)
+  // Cool hues: ~170-290° (cyan-blue-violet)
+  // Transitional: green (75-170°) and magenta/red (290-10°)
+  let hueTemp;
+  if (h >= 10 && h <= 75) {
+    // Warm zone: peak warmth around 40° (orange-yellow)
+    hueTemp = 1.0 - Math.abs(h - 40) / 35 * 0.3;
+  } else if (h > 75 && h < 170) {
+    // Green zone: transitions from warm to cool
+    // Yellow-green (75-120) is slightly warm, blue-green (120-170) is slightly cool
+    hueTemp = 1.0 - (h - 75) / 95 * 2.0; // goes from ~0.7 to ~-1.0
+  } else if (h >= 170 && h <= 290) {
+    // Cool zone: peak coolness around 230° (blue)
+    hueTemp = -1.0 + Math.abs(h - 230) / 60 * 0.3;
+  } else {
+    // Red-magenta zone (290-360, 0-10): warm-leaning but less than orange
+    const normH = h > 290 ? h - 360 : h;
+    hueTemp = 0.4 + (10 - Math.abs(normH)) / 80 * 0.3;
+  }
+
+  // Factor in the RGB balance as a secondary signal
+  // Warm colors tend to have high R and low B; cool colors the opposite
+  const rgbSignal = ((r / 255) * 0.5 + (g / 255) * 0.1 - (b / 255) * 0.6);
+
+  // Blend hue-based and RGB-based, hue is primary
+  let temp = hueTemp * 0.7 + rgbSignal * 0.3 / 0.6;
+
+  return Math.max(-1, Math.min(1, temp));
+}
+
+function colorValueDimension(lab) {
+  // Returns 0.0 (dark) to 1.0 (light) based on Lab L*
+  return lab[0] / 100;
+}
+
+function colorChroma(r, g, b, lab) {
+  // Returns 0.0 (muted/grey) to 1.0 (bright/saturated)
+  // Combine HSV saturation with Lab chroma for robustness
+  const [h, s, v] = rgbToHsv(r, g, b);
+
+  // Lab chroma: distance from grey axis
+  const labChroma = Math.sqrt(lab[1] * lab[1] + lab[2] * lab[2]);
+  // Normalize: typical max chroma is ~130 for vivid colors
+  const labChromaNorm = Math.min(1, labChroma / 100);
+
+  // HSV saturation weighted by value (dark saturated colors appear less chromatic)
+  const hsvComponent = s * (0.5 + v * 0.5);
+
+  // Blend both signals
+  return Math.min(1, hsvComponent * 0.5 + labChromaNorm * 0.5);
+}
+
+function analyzeColorDimensions(r, g, b) {
+  const lab = rgbToLab(r, g, b);
+  return {
+    temperature: colorTemperature(r, g, b),
+    value: colorValueDimension(lab),
+    chroma: colorChroma(r, g, b, lab)
+  };
+}
+
 // --- Delta E (CIEDE2000) ---
 
 function deltaE(lab1, lab2) {
@@ -348,50 +440,176 @@ function extractDominantColors(canvas, numColors = 5) {
   });
 }
 
-// --- Find Best Palette for a Color ---
+// --- Dimension-Based Scoring ---
 
-function findBestPalette(colorLab) {
+function scoreDimensionFit(value, range) {
+  // Score how well a value fits within a season's expected range (0-1)
+  if (value >= range.min && value <= range.max) {
+    // Inside range — score based on distance from ideal
+    const maxDist = Math.max(range.ideal - range.min, range.max - range.ideal);
+    const dist = Math.abs(value - range.ideal);
+    return maxDist === 0 ? 1.0 : 1.0 - (dist / maxDist) * 0.4; // 0.6-1.0 range
+  }
+  // Outside range — penalize based on how far outside
+  const overshoot = value < range.min ? range.min - value : value - range.max;
+  const rangeSize = range.max - range.min;
+  const penalty = rangeSize > 0 ? overshoot / rangeSize : overshoot;
+  return Math.max(0, 0.5 - penalty);
+}
+
+function getDimensionWeights(profile) {
+  // Primary dimension = 50%, secondary = 30%, third = 20%
+  const dims = ["temperature", "value", "chroma"];
+  const traitToDim = {
+    warm: "temperature", cool: "temperature",
+    light: "value", dark: "value",
+    bright: "chroma", muted: "chroma"
+  };
+
+  const primaryDim = traitToDim[profile.primary];
+  const secondaryDim = traitToDim[profile.secondary];
+
+  const weights = {};
+  for (const dim of dims) {
+    if (dim === primaryDim) weights[dim] = 0.50;
+    else if (dim === secondaryDim) weights[dim] = 0.30;
+    else weights[dim] = 0.20;
+  }
+  return weights;
+}
+
+function scoreDimensions(colorDims, seasonKey) {
+  const profile = getSeasonProfile(seasonKey);
+  if (!profile) return { dimensionScore: 0.5, feedback: "", scores: {} };
+
+  const tempScore = scoreDimensionFit(colorDims.temperature, profile.temperature);
+  const valueScore = scoreDimensionFit(colorDims.value, profile.value);
+  const chromaScore = scoreDimensionFit(colorDims.chroma, profile.chroma);
+
+  const weights = getDimensionWeights(profile);
+  const dimensionScore =
+    tempScore * weights.temperature +
+    valueScore * weights.value +
+    chromaScore * weights.chroma;
+
+  const scores = {
+    temperature: { score: tempScore, value: colorDims.temperature },
+    value: { score: valueScore, value: colorDims.value },
+    chroma: { score: chromaScore, value: colorDims.chroma }
+  };
+
+  // Generate feedback — identify the biggest mismatch
+  const feedback = generateDimensionFeedback(colorDims, profile, scores);
+
+  return { dimensionScore, feedback, scores };
+}
+
+function generateDimensionFeedback(colorDims, profile, scores) {
+  const seasonName = profile.name;
+
+  // Find the worst-scoring dimension
+  const dimEntries = [
+    { dim: "temperature", score: scores.temperature.score, value: colorDims.temperature, range: profile.temperature },
+    { dim: "value", score: scores.value.score, value: colorDims.value, range: profile.value },
+    { dim: "chroma", score: scores.chroma.score, value: colorDims.chroma, range: profile.chroma }
+  ].sort((a, b) => a.score - b.score);
+
+  const worst = dimEntries[0];
+
+  // If everything scores well, give positive feedback
+  if (worst.score >= 0.7) {
+    const traitLabels = {
+      warm: "warm", cool: "cool", light: "light", dark: "dark", bright: "bright", muted: "muted"
+    };
+    return `Good ${traitLabels[profile.primary]} and ${traitLabels[profile.secondary]} match`;
+  }
+
+  // Generate specific negative feedback
+  if (worst.dim === "temperature") {
+    if (worst.value > worst.range.max) {
+      return `Too warm for ${seasonName}`;
+    } else {
+      return `Too cool for ${seasonName}`;
+    }
+  } else if (worst.dim === "value") {
+    if (worst.value > worst.range.max) {
+      return `Too light for ${seasonName}`;
+    } else {
+      return `Too dark for ${seasonName}`;
+    }
+  } else {
+    if (worst.value > worst.range.max) {
+      return `Too bright for ${seasonName}`;
+    } else {
+      return `Too muted for ${seasonName}`;
+    }
+  }
+}
+
+// --- Find Best Palette for a Color (dimension-aware) ---
+
+function findBestPalette(colorLab, colorRgb) {
+  const dims = analyzeColorDimensions(colorRgb[0], colorRgb[1], colorRgb[2]);
   let bestKey = null;
   let bestName = null;
-  let bestDistance = Infinity;
+  let bestScore = -Infinity;
 
-  for (const [key, palette] of Object.entries(PALETTES)) {
-    for (const pc of palette.colors) {
-      const pcLab = hexToLab(pc.hex);
-      const dist = deltaE(colorLab, pcLab);
-      if (dist < bestDistance) {
-        bestDistance = dist;
-        bestKey = key;
-        bestName = palette.name;
-      }
+  for (const [key] of Object.entries(PALETTES)) {
+    const profile = getSeasonProfile(key);
+    if (!profile) continue;
+
+    // Combine dimension score with Delta E to best palette swatch
+    const dimResult = scoreDimensions(dims, key);
+    const deMatch = matchColorToPalette(colorLab, PALETTES[key].colors);
+    let deScore;
+    if (deMatch.distance < 6) deScore = 1.0;
+    else if (deMatch.distance < 12) deScore = 0.65;
+    else if (deMatch.distance < 20) deScore = 0.3;
+    else deScore = 0.0;
+
+    const combined = dimResult.dimensionScore * 0.6 + deScore * 0.4;
+    if (combined > bestScore) {
+      bestScore = combined;
+      bestKey = key;
+      bestName = profile.name;
     }
   }
 
-  return { key: bestKey, name: bestName, distance: bestDistance };
+  return { key: bestKey, name: bestName, score: bestScore };
 }
 
-// --- Find Best Overall Palette (weighted by cluster size) ---
+// --- Find Best Overall Palette (weighted by cluster size, dimension-aware) ---
 
 function findBestOverallPalette(dominantColors) {
   const totalPixels = dominantColors.reduce((s, c) => s + c.percentage, 0);
   const paletteScores = {};
 
   for (const [key, palette] of Object.entries(PALETTES)) {
+    const profile = getSeasonProfile(key);
+    if (!profile) continue;
+
     let weightedScore = 0;
     for (const color of dominantColors) {
-      const match = matchColorToPalette(color.lab, palette.colors);
       const weight = totalPixels > 0 ? color.percentage / totalPixels : 1 / dominantColors.length;
-      let score;
-      if (match.distance < 6) score = 1.0;
-      else if (match.distance < 12) score = 0.65;
-      else if (match.distance < 20) score = 0.3;
-      else score = 0.0;
-      weightedScore += score * weight;
+
+      // Delta E score
+      const deMatch = matchColorToPalette(color.lab, palette.colors);
+      let deScore;
+      if (deMatch.distance < 6) deScore = 1.0;
+      else if (deMatch.distance < 12) deScore = 0.65;
+      else if (deMatch.distance < 20) deScore = 0.3;
+      else deScore = 0.0;
+
+      // Dimension score
+      const dims = analyzeColorDimensions(color.rgb[0], color.rgb[1], color.rgb[2]);
+      const dimResult = scoreDimensions(dims, key);
+
+      const combined = dimResult.dimensionScore * 0.6 + deScore * 0.4;
+      weightedScore += combined * weight;
     }
     paletteScores[key] = { name: palette.name, score: weightedScore };
   }
 
-  // Sort by score descending, return top 3
   return Object.entries(paletteScores)
     .sort((a, b) => b[1].score - a[1].score)
     .slice(0, 3)
@@ -416,36 +634,44 @@ function matchColorToPalette(colorLab, paletteColors) {
   return { paletteColor: bestMatch, distance: bestDistance };
 }
 
-function analyzeColors(dominantColors, palette) {
-  // Compute total pixel count for weighting
+function analyzeColors(dominantColors, palette, seasonKey) {
   const totalPixels = dominantColors.reduce((s, c) => s + c.percentage, 0);
 
   const results = dominantColors.map(color => {
     const match = matchColorToPalette(color.lab, palette.colors);
     const weight = totalPixels > 0 ? color.percentage / totalPixels : 1 / dominantColors.length;
-    let verdict, level, score;
 
-    // CIEDE2000 thresholds (tighter than CIE76 since the metric is more accurate)
-    if (match.distance < 6) {
+    // Delta E score
+    let deScore;
+    if (match.distance < 6) deScore = 1.0;
+    else if (match.distance < 12) deScore = 0.65;
+    else if (match.distance < 20) deScore = 0.3;
+    else deScore = 0.0;
+
+    // Dimension-based score
+    const dims = analyzeColorDimensions(color.rgb[0], color.rgb[1], color.rgb[2]);
+    const dimResult = scoreDimensions(dims, seasonKey);
+
+    // Combined score: 60% dimensions (theory-based), 40% Delta E (swatch proximity)
+    const score = dimResult.dimensionScore * 0.6 + deScore * 0.4;
+
+    let verdict, level;
+    if (score >= 0.75) {
       verdict = "Great match!";
       level = "great";
-      score = 1.0;
-    } else if (match.distance < 12) {
+    } else if (score >= 0.55) {
       verdict = "Close enough";
       level = "ok";
-      score = 0.65;
-    } else if (match.distance < 20) {
+    } else if (score >= 0.35) {
       verdict = "Slightly off";
       level = "warning";
-      score = 0.3;
     } else {
       verdict = "Not in your palette";
       level = "bad";
-      score = 0.0;
     }
 
     // Find which palette this color fits best
-    const bestPalette = findBestPalette(color.lab);
+    const bestPalette = findBestPalette(color.lab, color.rgb);
 
     return {
       detectedColor: color,
@@ -455,24 +681,23 @@ function analyzeColors(dominantColors, palette) {
       level,
       weight,
       score,
-      bestPalette
+      bestPalette,
+      feedback: dimResult.feedback,
+      dimensions: dims,
+      dimensionScores: dimResult.scores
     };
   });
 
-  // Weighted overall score — dominant colors matter more
+  // Weighted overall score
   const weightedScore = results.reduce((sum, r) => sum + r.score * r.weight, 0);
-
-  // The dominant color (largest cluster) has strong influence
-  const dominantResult = results[0]; // already sorted by cluster size
+  const dominantResult = results[0];
 
   let overallVerdict, overallLevel;
 
-  // If the dominant color (>30% of pixels) is bad, the overall should reflect that
   if (dominantResult.weight > 0.3 && dominantResult.level === "bad") {
     overallVerdict = "This isn't in your color palette";
     overallLevel = "bad";
   } else if (dominantResult.weight > 0.3 && dominantResult.level === "warning") {
-    // Dominant color is off — cap at warning regardless of weighted score
     if (weightedScore > 0.6) {
       overallVerdict = "Main color is slightly off your palette";
       overallLevel = "warning";
@@ -480,13 +705,13 @@ function analyzeColors(dominantColors, palette) {
       overallVerdict = "This isn't the best match for your palette";
       overallLevel = "warning";
     }
-  } else if (weightedScore >= 0.75) {
+  } else if (weightedScore >= 0.7) {
     overallVerdict = "This looks great on you!";
     overallLevel = "great";
   } else if (weightedScore >= 0.5) {
     overallVerdict = "Pretty good — close to your palette";
     overallLevel = "ok";
-  } else if (weightedScore >= 0.25) {
+  } else if (weightedScore >= 0.3) {
     overallVerdict = "Some colors don't match your palette";
     overallLevel = "warning";
   } else {
@@ -494,8 +719,11 @@ function analyzeColors(dominantColors, palette) {
     overallLevel = "bad";
   }
 
+  // Overall feedback — from the dominant color's dimension analysis
+  const overallFeedback = dominantResult.feedback;
+
   // Find which palettes this garment suits best overall
   const bestPalettes = findBestOverallPalette(dominantColors);
 
-  return { results, overallVerdict, overallLevel, weightedScore: Math.round(weightedScore * 100), bestPalettes };
+  return { results, overallVerdict, overallLevel, overallFeedback, weightedScore: Math.round(weightedScore * 100), bestPalettes };
 }
