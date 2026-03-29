@@ -361,9 +361,9 @@ function extractDominantColors(canvas, numColors = 5) {
   const data = imageData.data;
 
   // Sample every 4th pixel for performance
+  // No skin-tone filter: brown/tan/warm garments overlap with skin tones
+  // and the center-60% crop already avoids hands at edges
   const pixels = [];
-  let skinCount = 0;
-  let totalSampled = 0;
 
   for (let i = 0; i < data.length; i += 16) {
     const r = data[i];
@@ -374,40 +374,18 @@ function extractDominantColors(canvas, numColors = 5) {
     const brightness = (r + g + b) / 3;
     if (brightness < 8 || brightness > 248) continue;
 
-    totalSampled++;
-
-    // Track skin pixels but don't add them
-    if (isSkinTone(r, g, b)) {
-      skinCount++;
-      continue;
-    }
-
     // For mid-to-bright pixels, filter out very low saturation (likely white/gray background)
     // But always keep dark pixels — dark navy, charcoal, etc. are valid garment colors
     if (brightness > 60) {
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
       const saturation = max === 0 ? 0 : (max - min) / max;
-      // Only filter greys in the mid-bright range
       if (saturation < 0.04 && brightness > 80 && brightness < 220) {
         continue;
       }
     }
 
     pixels.push([r, g, b]);
-  }
-
-  // If too many pixels were filtered as skin (>80%), it might be wrong — retry without skin filter
-  if (pixels.length < 10 && skinCount > totalSampled * 0.5) {
-    for (let i = 0; i < data.length; i += 16) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const brightness = (r + g + b) / 3;
-      if (brightness >= 8 && brightness <= 248) {
-        pixels.push([r, g, b]);
-      }
-    }
   }
 
   if (pixels.length < 10) {
