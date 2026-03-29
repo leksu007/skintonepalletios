@@ -193,32 +193,85 @@ function capturePhoto() {
   return canvas;
 }
 
-// --- Analysis ---
+// --- Color Correction Screen ---
 
-function runAnalysis(canvas) {
+let capturedCanvas = null;
+let detectedDominantColor = null;
+
+function showColorPicker(canvas) {
+  capturedCanvas = canvas;
+  const allColors = extractDominantColors(canvas, 4);
+
+  if (allColors.length === 0) {
+    alert('Could not detect any colors. Please try again with better lighting.');
+    showScreen('screen-palette');
+    return;
+  }
+
+  detectedDominantColor = allColors[0];
+
+  // Show detected color
+  const colorDisplay = document.getElementById('detected-color-large');
+  colorDisplay.style.backgroundColor = detectedDominantColor.hex;
+
+  // Generate and show variations
+  const variations = generateColorVariations(detectedDominantColor.rgb);
+  const container = document.getElementById('color-variations');
+  container.innerHTML = '';
+
+  for (const v of variations) {
+    const item = document.createElement('button');
+    item.className = 'color-variation-item';
+    item.innerHTML = `
+      <div class="variation-circle" style="background-color: ${v.hex}"></div>
+      <span class="variation-label">${v.label}</span>
+    `;
+    item.addEventListener('click', () => {
+      runAnalysisWithColor(v);
+    });
+    container.appendChild(item);
+  }
+
+  showScreen('screen-color-pick');
+}
+
+function runAnalysisWithColor(colorObj) {
   const loading = document.getElementById('loading');
   loading.classList.remove('hidden');
 
-  // Use setTimeout to allow the loading UI to render
   setTimeout(() => {
     const palette = getPaletteByKey(selectedPaletteKey);
-    const allColors = extractDominantColors(canvas, 4);
 
-    if (allColors.length === 0) {
-      loading.classList.add('hidden');
-      alert('Could not detect any colors. Please try again with better lighting.');
-      showScreen('screen-palette');
-      return;
-    }
+    const dominantColors = [{
+      rgb: colorObj.rgb,
+      hex: colorObj.hex,
+      lab: colorObj.lab || rgbToLab(colorObj.rgb[0], colorObj.rgb[1], colorObj.rgb[2]),
+      percentage: 100
+    }];
 
-    // Focus on the single dominant color (largest cluster)
-    const dominantColors = [allColors[0]];
+    const analysis = analyzeColors(dominantColors, palette, selectedPaletteKey);
+    showResults(analysis, palette);
 
-    // Normalize percentages
-    const total = dominantColors.reduce((s, c) => s + c.percentage, 0);
-    dominantColors.forEach(c => {
-      c.percentage = Math.round((c.percentage / total) * 100);
-    });
+    loading.classList.add('hidden');
+    showScreen('screen-results');
+  }, 100);
+}
+
+// --- Analysis (with detected color) ---
+
+function runAnalysis() {
+  const loading = document.getElementById('loading');
+  loading.classList.remove('hidden');
+
+  setTimeout(() => {
+    const palette = getPaletteByKey(selectedPaletteKey);
+
+    const dominantColors = [{
+      rgb: detectedDominantColor.rgb,
+      hex: detectedDominantColor.hex,
+      lab: detectedDominantColor.lab,
+      percentage: 100
+    }];
 
     const analysis = analyzeColors(dominantColors, palette, selectedPaletteKey);
     showResults(analysis, palette);
@@ -341,8 +394,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-capture').addEventListener('click', () => {
     const canvas = capturePhoto();
-    runAnalysis(canvas);
+    showColorPicker(canvas);
   });
+
+  document.getElementById('btn-use-detected').addEventListener('click', () => {
+    runAnalysis();
+  });
+
+  document.getElementById('btn-retake').addEventListener('click', startCamera);
 
   document.getElementById('btn-switch-camera').addEventListener('click', switchCamera);
 

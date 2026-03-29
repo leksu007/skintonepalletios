@@ -52,7 +52,7 @@
 
       <button class="btn btn-exit exit-app-btn">Exit App</button>
 
-      <div class="app-version">v1.4.0 — 2026-03-29</div>
+      <div class="app-version">v1.5.0 — 2026-03-29</div>
     </div>
   </div>
 
@@ -90,7 +90,29 @@
     <canvas id="capture-canvas" class="hidden"></canvas>
   </div>
 
-  <!-- Screen 3: Results -->
+  <!-- Screen 3: Color Correction -->
+  <div id="screen-color-pick" class="screen">
+    <div class="container">
+      <div class="header">
+        <h1>Adjust Color</h1>
+        <p class="subtitle">Select the color closest to what you see in real life</p>
+      </div>
+
+      <div class="detected-color-display">
+        <div class="detected-color-large" id="detected-color-large"></div>
+        <p class="detected-color-label">Detected color</p>
+      </div>
+
+      <div class="color-variations" id="color-variations"></div>
+
+      <div class="actions">
+        <button id="btn-use-detected" class="btn btn-primary">Use Detected Color</button>
+        <button id="btn-retake" class="btn btn-secondary">Retake Photo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 4: Results -->
   <div id="screen-results" class="screen">
     <div class="container">
       <div class="header">

@@ -60,6 +60,94 @@ function hexToLab(hex) {
   return rgbToLab(r, g, b);
 }
 
+// --- Lab to RGB (reverse conversion) ---
+
+function labToXyz(L, a, b) {
+  const xn = 95.047, yn = 100.000, zn = 108.883;
+  let fy = (L + 16) / 116;
+  let fx = a / 500 + fy;
+  let fz = fy - b / 200;
+
+  const epsilon = 0.008856;
+  const kappa = 903.3;
+
+  const x3 = fx * fx * fx;
+  const z3 = fz * fz * fz;
+
+  const xr = x3 > epsilon ? x3 : (116 * fx - 16) / kappa;
+  const yr = L > kappa * epsilon ? Math.pow((L + 16) / 116, 3) : L / kappa;
+  const zr = z3 > epsilon ? z3 : (116 * fz - 16) / kappa;
+
+  return [xr * xn, yr * yn, zr * zn];
+}
+
+function xyzToRgb(x, y, z) {
+  x /= 100; y /= 100; z /= 100;
+
+  let r = x * 3.2404542 + y * -1.5371385 + z * -0.4985314;
+  let g = x * -0.9692660 + y * 1.8760108 + z * 0.0415560;
+  let b = x * 0.0556434 + y * -0.2040259 + z * 1.0572252;
+
+  // Gamma correction
+  r = r > 0.0031308 ? 1.055 * Math.pow(r, 1 / 2.4) - 0.055 : 12.92 * r;
+  g = g > 0.0031308 ? 1.055 * Math.pow(g, 1 / 2.4) - 0.055 : 12.92 * g;
+  b = b > 0.0031308 ? 1.055 * Math.pow(b, 1 / 2.4) - 0.055 : 12.92 * b;
+
+  return [
+    Math.max(0, Math.min(255, Math.round(r * 255))),
+    Math.max(0, Math.min(255, Math.round(g * 255))),
+    Math.max(0, Math.min(255, Math.round(b * 255)))
+  ];
+}
+
+function labToRgb(L, a, b) {
+  const [x, y, z] = labToXyz(L, a, b);
+  return xyzToRgb(x, y, z);
+}
+
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+// --- Color Variation Generator ---
+
+function generateColorVariations(rgb) {
+  const lab = rgbToLab(rgb[0], rgb[1], rgb[2]);
+  const L = lab[0], a = lab[1], b = lab[2];
+
+  // Compute Lab chroma and hue for warm/cool shifts
+  const C = Math.sqrt(a * a + b * b);
+  const hRad = Math.atan2(b, a);
+
+  // Warm shift: rotate hue toward yellow (~70° in Lab)
+  // Cool shift: rotate hue toward blue (~-70° in Lab)
+  const warmShift = 0.35; // radians
+  const coolShift = -0.35;
+
+  const variations = [
+    { label: "Lighter", lab: [Math.min(100, L + 12), a, b] },
+    { label: "Darker", lab: [Math.max(0, L - 12), a, b] },
+    { label: "Warmer", lab: [L, C * Math.cos(hRad + warmShift), C * Math.sin(hRad + warmShift)] },
+    { label: "Cooler", lab: [L, C * Math.cos(hRad + coolShift), C * Math.sin(hRad + coolShift)] },
+    { label: "More vivid", lab: [L, a * 1.35, b * 1.35] },
+    { label: "More muted", lab: [L, a * 0.65, b * 0.65] },
+    { label: "Warm + Light", lab: [Math.min(100, L + 10), C * Math.cos(hRad + warmShift * 0.7), C * Math.sin(hRad + warmShift * 0.7)] },
+    { label: "Cool + Light", lab: [Math.min(100, L + 10), C * Math.cos(hRad + coolShift * 0.7), C * Math.sin(hRad + coolShift * 0.7)] },
+    { label: "Warm + Dark", lab: [Math.max(0, L - 10), C * Math.cos(hRad + warmShift * 0.7), C * Math.sin(hRad + warmShift * 0.7)] },
+    { label: "Cool + Dark", lab: [Math.max(0, L - 10), C * Math.cos(hRad + coolShift * 0.7), C * Math.sin(hRad + coolShift * 0.7)] }
+  ];
+
+  return variations.map(v => {
+    const vRgb = labToRgb(v.lab[0], v.lab[1], v.lab[2]);
+    return {
+      label: v.label,
+      rgb: vRgb,
+      hex: rgbToHex(vRgb[0], vRgb[1], vRgb[2]),
+      lab: v.lab
+    };
+  });
+}
+
 // --- Color Dimension Analysis ---
 // Analyzes a color's temperature (warm/cool), value (light/dark), chroma (bright/muted)
 

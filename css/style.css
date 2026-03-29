@@ -396,6 +396,67 @@ optgroup {
   background: var(--accent);
 }
 
+/* --- Color Correction Screen --- */
+
+.detected-color-display {
+  text-align: center;
+  margin: 16px 0;
+}
+
+.detected-color-large {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin: 0 auto 8px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.detected-color-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.color-variations {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.color-variation-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 8px 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.color-variation-item:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.variation-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.variation-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.2;
+}
+
 /* --- Results --- */
 
 .verdict-card {
