@@ -52,7 +52,7 @@
 
       <button class="btn btn-exit exit-app-btn">Exit App</button>
 
-      <div class="app-version">v1.3.0 — 2026-03-29</div>
+      <div class="app-version">v1.4.0 — 2026-03-29</div>
     </div>
   </div>
 
@@ -60,8 +60,13 @@
   <div id="screen-camera" class="screen">
     <div class="camera-wrapper">
       <video id="camera-feed" autoplay playsinline></video>
+      <div class="camera-label-bar">
+        <span id="camera-label" class="camera-label"></span>
+      </div>
       <div class="camera-overlay">
-        <div class="camera-guide"></div>
+        <div class="camera-guide">
+          <span class="camera-guide-label">Place color here</span>
+        </div>
       </div>
       <div class="camera-controls">
         <button id="btn-back" class="btn btn-circle btn-secondary" aria-label="Back">
@@ -72,7 +77,14 @@
         <button id="btn-capture" class="btn btn-circle btn-capture" aria-label="Take Photo">
           <div class="capture-inner"></div>
         </button>
-        <div class="btn-circle btn-placeholder"></div>
+        <button id="btn-switch-camera" class="btn btn-circle btn-secondary" aria-label="Switch Camera">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 16v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/>
+            <polyline points="16 10 20 6 24 10"/>
+            <path d="M4 8V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4"/>
+            <polyline points="8 14 4 18 0 14"/>
+          </svg>
+        </button>
       </div>
     </div>
     <canvas id="capture-canvas" class="hidden"></canvas>

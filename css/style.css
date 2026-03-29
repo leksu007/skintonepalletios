@@ -289,6 +289,25 @@ optgroup {
   object-fit: cover;
 }
 
+.camera-label-bar {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.camera-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px 12px;
+  border-radius: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
 .camera-overlay {
   position: absolute;
   top: 0;
@@ -302,11 +321,43 @@ optgroup {
 }
 
 .camera-guide {
-  width: 60%;
-  aspect-ratio: 3 / 4;
-  max-height: 70%;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 16px;
+  width: 48px;
+  height: 48px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 0 20px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.camera-guide::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -12px;
+  right: -12px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.camera-guide::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -12px;
+  bottom: -12px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.camera-guide-label {
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
 .camera-controls {

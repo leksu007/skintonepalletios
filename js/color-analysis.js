@@ -351,21 +351,20 @@ function extractDominantColors(canvas, numColors = 5) {
   const width = canvas.width;
   const height = canvas.height;
 
-  // Sample from center 60% of image to avoid background
-  const marginX = Math.floor(width * 0.2);
-  const marginY = Math.floor(height * 0.2);
-  const sampleWidth = width - 2 * marginX;
-  const sampleHeight = height - 2 * marginY;
+  // Sample from a small probe area in the center (~8% of image = roughly 1cm on phone)
+  const probeSize = Math.floor(Math.min(width, height) * 0.08);
+  const marginX = Math.floor((width - probeSize) / 2);
+  const marginY = Math.floor((height - probeSize) / 2);
+  const sampleWidth = probeSize;
+  const sampleHeight = probeSize;
 
   const imageData = ctx.getImageData(marginX, marginY, sampleWidth, sampleHeight);
   const data = imageData.data;
 
-  // Sample every 4th pixel for performance
-  // No skin-tone filter: brown/tan/warm garments overlap with skin tones
-  // and the center-60% crop already avoids hands at edges
+  // Sample every pixel in the small probe area for accuracy
   const pixels = [];
 
-  for (let i = 0; i < data.length; i += 16) {
+  for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
@@ -390,7 +389,7 @@ function extractDominantColors(canvas, numColors = 5) {
 
   if (pixels.length < 10) {
     // Last resort — take everything except pure black/white
-    for (let i = 0; i < data.length; i += 16) {
+    for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];

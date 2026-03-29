@@ -4,6 +4,8 @@
 
 let selectedPaletteKey = null;
 let cameraStream = null;
+let availableCameras = [];
+let currentCameraIndex = 0;
 
 // --- Screen Navigation ---
 
@@ -89,19 +91,55 @@ function showPalettePreview(key) {
 
 // --- Camera ---
 
+async function loadCameraList() {
+  try {
+    // Need a temporary stream to trigger permission, then enumerate
+    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    tempStream.getTracks().forEach(t => t.stop());
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    availableCameras = devices.filter(d => d.kind === 'videoinput');
+
+    // Try to default to a rear/environment camera
+    const rearIdx = availableCameras.findIndex(d =>
+      d.label.toLowerCase().includes('back') ||
+      d.label.toLowerCase().includes('rear') ||
+      d.label.toLowerCase().includes('environment')
+    );
+    if (rearIdx >= 0) currentCameraIndex = rearIdx;
+
+    // Show/hide switch button
+    const switchBtn = document.getElementById('btn-switch-camera');
+    if (switchBtn) {
+      switchBtn.style.display = availableCameras.length > 1 ? '' : 'none';
+    }
+  } catch (e) {
+    availableCameras = [];
+  }
+}
+
 async function startCamera() {
   try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'environment',
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      }
-    });
+    if (availableCameras.length === 0) {
+      await loadCameraList();
+    }
+
+    const constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 } } };
+
+    if (availableCameras.length > 0 && availableCameras[currentCameraIndex]) {
+      constraints.video.deviceId = { exact: availableCameras[currentCameraIndex].deviceId };
+    } else {
+      constraints.video.facingMode = 'environment';
+    }
+
+    cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
 
     const video = document.getElementById('camera-feed');
     video.srcObject = cameraStream;
     showScreen('screen-camera');
+
+    // Show camera label
+    updateCameraLabel();
   } catch (err) {
     if (err.name === 'NotAllowedError') {
       alert('Camera access was denied. Please allow camera access to use this feature.');
@@ -111,6 +149,25 @@ async function startCamera() {
       alert('Could not access camera: ' + err.message);
     }
   }
+}
+
+function updateCameraLabel() {
+  const label = document.getElementById('camera-label');
+  if (!label || availableCameras.length <= 1) {
+    if (label) label.textContent = '';
+    return;
+  }
+  const cam = availableCameras[currentCameraIndex];
+  // Show a short label: "Camera 1 of 3" or the device label if available
+  const name = cam.label ? cam.label.split('(')[0].trim() : `Camera ${currentCameraIndex + 1}`;
+  label.textContent = name;
+}
+
+async function switchCamera() {
+  if (availableCameras.length <= 1) return;
+  currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
+  stopCamera();
+  await startCamera();
 }
 
 function stopCamera() {
@@ -286,6 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = capturePhoto();
     runAnalysis(canvas);
   });
+
+  document.getElementById('btn-switch-camera').addEventListener('click', switchCamera);
 
   document.getElementById('btn-retry').addEventListener('click', startCamera);
 
