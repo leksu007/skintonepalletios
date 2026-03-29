@@ -145,14 +145,17 @@ function runAnalysis(canvas) {
   // Use setTimeout to allow the loading UI to render
   setTimeout(() => {
     const palette = getPaletteByKey(selectedPaletteKey);
-    const dominantColors = extractDominantColors(canvas, 4);
+    const allColors = extractDominantColors(canvas, 4);
 
-    if (dominantColors.length === 0) {
+    if (allColors.length === 0) {
       loading.classList.add('hidden');
       alert('Could not detect any colors. Please try again with better lighting.');
       showScreen('screen-palette');
       return;
     }
+
+    // Focus on the single dominant color (largest cluster)
+    const dominantColors = [allColors[0]];
 
     // Normalize percentages
     const total = dominantColors.reduce((s, c) => s + c.percentage, 0);

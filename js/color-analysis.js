@@ -670,6 +670,14 @@ function analyzeColors(dominantColors, palette, seasonKey) {
       level = "bad";
     }
 
+    // Make feedback consistent with verdict — don't show negative feedback for good verdicts
+    let feedback = dimResult.feedback;
+    if (level === "great") {
+      feedback = dimResult.dimensionScore >= 0.7 ? dimResult.feedback : "Good match for your palette";
+    } else if (level === "ok" && dimResult.dimensionScore >= 0.6) {
+      feedback = "Reasonably close to your palette";
+    }
+
     // Find which palette this color fits best
     const bestPalette = findBestPalette(color.lab, color.rgb);
 
@@ -682,7 +690,7 @@ function analyzeColors(dominantColors, palette, seasonKey) {
       weight,
       score,
       bestPalette,
-      feedback: dimResult.feedback,
+      feedback,
       dimensions: dims,
       dimensionScores: dimResult.scores
     };
