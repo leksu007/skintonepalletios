@@ -186,6 +186,24 @@ function showResults(analysis, palette) {
   document.getElementById('verdict-text').textContent = analysis.overallVerdict;
   document.getElementById('verdict-palette').textContent = 'Your palette: ' + palette.name;
 
+  // Show best palettes recommendation
+  const bestPalettesEl = document.getElementById('best-palettes');
+  if (bestPalettesEl && analysis.bestPalettes && analysis.bestPalettes.length > 0) {
+    const validPalettes = analysis.bestPalettes.filter(p => p.score > 0);
+    if (validPalettes.length === 0) {
+      bestPalettesEl.innerHTML = '';
+    } else {
+      const listHtml = validPalettes
+        .map((p, i) => {
+          const isCurrent = p.key === selectedPaletteKey;
+          const classes = `best-palette-tag${i === 0 ? ' top' : ''}`;
+          return `<span class="${classes}">${p.name} (${p.score}%)${isCurrent ? ' — yours!' : ''}</span>`;
+        })
+        .join(' ');
+      bestPalettesEl.innerHTML = `<div class="best-palettes-label">Best palettes for this item:</div>${listHtml}`;
+    }
+  }
+
   // Color results
   const container = document.getElementById('color-results');
   container.innerHTML = '';
@@ -216,6 +234,7 @@ function showResults(analysis, palette) {
         <span class="badge badge-${result.level}">${result.verdict}</span>
         <span class="distance">Distance: ${result.distance}</span>
       </div>
+      <div class="color-best-palette">Best for: ${result.bestPalette.name}</div>
     `;
 
     container.appendChild(card);

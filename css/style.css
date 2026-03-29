@@ -378,6 +378,37 @@ optgroup {
   color: var(--text-muted);
 }
 
+.best-palettes {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.best-palettes-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.best-palette-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 20px;
+  margin: 3px 2px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+
+.best-palette-tag.top {
+  background: rgba(46, 213, 115, 0.15);
+  color: var(--great);
+  font-weight: 600;
+}
+
 /* --- Color Result Cards --- */
 
 .color-results {
@@ -469,6 +500,13 @@ optgroup {
 .distance {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.color-best-palette {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  font-style: italic;
 }
 
 /* --- Actions --- */

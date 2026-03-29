@@ -60,13 +60,75 @@ function hexToLab(hex) {
   return rgbToLab(r, g, b);
 }
 
-// --- Delta E (CIE76) ---
+// --- Delta E (CIEDE2000) ---
 
 function deltaE(lab1, lab2) {
+  const L1 = lab1[0], a1 = lab1[1], b1 = lab1[2];
+  const L2 = lab2[0], a2 = lab2[1], b2 = lab2[2];
+
+  const avgL = (L1 + L2) / 2;
+  const C1 = Math.sqrt(a1 * a1 + b1 * b1);
+  const C2 = Math.sqrt(a2 * a2 + b2 * b2);
+  const avgC = (C1 + C2) / 2;
+
+  const G = 0.5 * (1 - Math.sqrt(Math.pow(avgC, 7) / (Math.pow(avgC, 7) + Math.pow(25, 7))));
+  const a1p = a1 * (1 + G);
+  const a2p = a2 * (1 + G);
+
+  const C1p = Math.sqrt(a1p * a1p + b1 * b1);
+  const C2p = Math.sqrt(a2p * a2p + b2 * b2);
+  const avgCp = (C1p + C2p) / 2;
+
+  let h1p = Math.atan2(b1, a1p) * 180 / Math.PI;
+  if (h1p < 0) h1p += 360;
+  let h2p = Math.atan2(b2, a2p) * 180 / Math.PI;
+  if (h2p < 0) h2p += 360;
+
+  let dLp = L2 - L1;
+  let dCp = C2p - C1p;
+
+  let dhp;
+  if (C1p * C2p === 0) {
+    dhp = 0;
+  } else if (Math.abs(h2p - h1p) <= 180) {
+    dhp = h2p - h1p;
+  } else if (h2p - h1p > 180) {
+    dhp = h2p - h1p - 360;
+  } else {
+    dhp = h2p - h1p + 360;
+  }
+  const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin(dhp * Math.PI / 360);
+
+  let avgHp;
+  if (C1p * C2p === 0) {
+    avgHp = h1p + h2p;
+  } else if (Math.abs(h1p - h2p) <= 180) {
+    avgHp = (h1p + h2p) / 2;
+  } else if (h1p + h2p < 360) {
+    avgHp = (h1p + h2p + 360) / 2;
+  } else {
+    avgHp = (h1p + h2p - 360) / 2;
+  }
+
+  const T = 1
+    - 0.17 * Math.cos((avgHp - 30) * Math.PI / 180)
+    + 0.24 * Math.cos(2 * avgHp * Math.PI / 180)
+    + 0.32 * Math.cos((3 * avgHp + 6) * Math.PI / 180)
+    - 0.20 * Math.cos((4 * avgHp - 63) * Math.PI / 180);
+
+  const SL = 1 + 0.015 * Math.pow(avgL - 50, 2) / Math.sqrt(20 + Math.pow(avgL - 50, 2));
+  const SC = 1 + 0.045 * avgCp;
+  const SH = 1 + 0.015 * avgCp * T;
+
+  const RT_exp = -2 * Math.sqrt(Math.pow(avgCp, 7) / (Math.pow(avgCp, 7) + Math.pow(25, 7)));
+  const deltaTheta = 30 * Math.exp(-Math.pow((avgHp - 275) / 25, 2));
+  const RC = RT_exp * Math.sin(2 * deltaTheta * Math.PI / 180);
+
   return Math.sqrt(
-    Math.pow(lab1[0] - lab2[0], 2) +
-    Math.pow(lab1[1] - lab2[1], 2) +
-    Math.pow(lab1[2] - lab2[2], 2)
+    Math.pow(dLp / SL, 2) +
+    Math.pow(dCp / SC, 2) +
+    Math.pow(dHp / SH, 2) +
+    RC * (dCp / SC) * (dHp / SH)
   );
 }
 
@@ -156,6 +218,40 @@ function kMeans(pixels, k, maxIter = 20) {
   })).filter(c => c.count > 0).sort((a, b) => b.count - a.count);
 }
 
+// --- Skin Tone Detection ---
+
+function isSkinTone(r, g, b) {
+  // Convert to normalized values
+  const total = r + g + b;
+  if (total === 0) return false;
+
+  // HSV-based skin detection
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  let h = 0;
+  if (delta > 0) {
+    if (max === r) h = 60 * (((g - b) / delta) % 6);
+    else if (max === g) h = 60 * ((b - r) / delta + 2);
+    else h = 60 * ((r - g) / delta + 4);
+  }
+  if (h < 0) h += 360;
+
+  const s = max === 0 ? 0 : delta / max;
+  const v = max / 255;
+
+  // Skin tones: hue roughly 0-50°, moderate saturation, not too dark
+  const isSkinHue = (h >= 0 && h <= 50) || h >= 350;
+  const isSkinSat = s >= 0.1 && s <= 0.7;
+  const isSkinVal = v >= 0.2 && v <= 0.85;
+
+  // Additional RGB rule: skin tends to have R > G > B
+  const rgbSkin = r > g && g > b && (r - b) > 15;
+
+  return isSkinHue && isSkinSat && isSkinVal && rgbSkin;
+}
+
 // --- Color Extraction from Canvas ---
 
 function extractDominantColors(canvas, numColors = 5) {
@@ -174,32 +270,62 @@ function extractDominantColors(canvas, numColors = 5) {
 
   // Sample every 4th pixel for performance
   const pixels = [];
+  let skinCount = 0;
+  let totalSampled = 0;
+
   for (let i = 0; i < data.length; i += 16) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
 
-    // Filter out very dark and very light pixels (background/shadows)
+    // Only exclude near-black (pure shadows) and near-white (blown highlights)
     const brightness = (r + g + b) / 3;
-    if (brightness > 25 && brightness < 240) {
-      // Filter out very gray pixels (low saturation — likely background)
+    if (brightness < 8 || brightness > 248) continue;
+
+    totalSampled++;
+
+    // Track skin pixels but don't add them
+    if (isSkinTone(r, g, b)) {
+      skinCount++;
+      continue;
+    }
+
+    // For mid-to-bright pixels, filter out very low saturation (likely white/gray background)
+    // But always keep dark pixels — dark navy, charcoal, etc. are valid garment colors
+    if (brightness > 60) {
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
       const saturation = max === 0 ? 0 : (max - min) / max;
-      if (saturation > 0.05 || brightness < 60 || brightness > 200) {
+      // Only filter greys in the mid-bright range
+      if (saturation < 0.04 && brightness > 80 && brightness < 220) {
+        continue;
+      }
+    }
+
+    pixels.push([r, g, b]);
+  }
+
+  // If too many pixels were filtered as skin (>80%), it might be wrong — retry without skin filter
+  if (pixels.length < 10 && skinCount > totalSampled * 0.5) {
+    for (let i = 0; i < data.length; i += 16) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const brightness = (r + g + b) / 3;
+      if (brightness >= 8 && brightness <= 248) {
         pixels.push([r, g, b]);
       }
     }
   }
 
   if (pixels.length < 10) {
-    // Not enough colored pixels — try without saturation filter
+    // Last resort — take everything except pure black/white
     for (let i = 0; i < data.length; i += 16) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       const brightness = (r + g + b) / 3;
-      if (brightness > 15 && brightness < 245) {
+      if (brightness >= 4 && brightness <= 252) {
         pixels.push([r, g, b]);
       }
     }
@@ -222,6 +348,56 @@ function extractDominantColors(canvas, numColors = 5) {
   });
 }
 
+// --- Find Best Palette for a Color ---
+
+function findBestPalette(colorLab) {
+  let bestKey = null;
+  let bestName = null;
+  let bestDistance = Infinity;
+
+  for (const [key, palette] of Object.entries(PALETTES)) {
+    for (const pc of palette.colors) {
+      const pcLab = hexToLab(pc.hex);
+      const dist = deltaE(colorLab, pcLab);
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        bestKey = key;
+        bestName = palette.name;
+      }
+    }
+  }
+
+  return { key: bestKey, name: bestName, distance: bestDistance };
+}
+
+// --- Find Best Overall Palette (weighted by cluster size) ---
+
+function findBestOverallPalette(dominantColors) {
+  const totalPixels = dominantColors.reduce((s, c) => s + c.percentage, 0);
+  const paletteScores = {};
+
+  for (const [key, palette] of Object.entries(PALETTES)) {
+    let weightedScore = 0;
+    for (const color of dominantColors) {
+      const match = matchColorToPalette(color.lab, palette.colors);
+      const weight = totalPixels > 0 ? color.percentage / totalPixels : 1 / dominantColors.length;
+      let score;
+      if (match.distance < 6) score = 1.0;
+      else if (match.distance < 12) score = 0.65;
+      else if (match.distance < 20) score = 0.3;
+      else score = 0.0;
+      weightedScore += score * weight;
+    }
+    paletteScores[key] = { name: palette.name, score: weightedScore };
+  }
+
+  // Sort by score descending, return top 3
+  return Object.entries(paletteScores)
+    .sort((a, b) => b[1].score - a[1].score)
+    .slice(0, 3)
+    .map(([key, data]) => ({ key, name: data.name, score: Math.round(data.score * 100) }));
+}
+
 // --- Palette Matching ---
 
 function matchColorToPalette(colorLab, paletteColors) {
@@ -241,49 +417,76 @@ function matchColorToPalette(colorLab, paletteColors) {
 }
 
 function analyzeColors(dominantColors, palette) {
+  // Compute total pixel count for weighting
+  const totalPixels = dominantColors.reduce((s, c) => s + c.percentage, 0);
+
   const results = dominantColors.map(color => {
     const match = matchColorToPalette(color.lab, palette.colors);
-    let verdict, level;
+    const weight = totalPixels > 0 ? color.percentage / totalPixels : 1 / dominantColors.length;
+    let verdict, level, score;
 
-    if (match.distance < 10) {
+    // CIEDE2000 thresholds (tighter than CIE76 since the metric is more accurate)
+    if (match.distance < 6) {
       verdict = "Great match!";
       level = "great";
-    } else if (match.distance < 18) {
+      score = 1.0;
+    } else if (match.distance < 12) {
       verdict = "Close enough";
       level = "ok";
-    } else if (match.distance < 28) {
+      score = 0.65;
+    } else if (match.distance < 20) {
       verdict = "Slightly off";
       level = "warning";
+      score = 0.3;
     } else {
       verdict = "Not in your palette";
       level = "bad";
+      score = 0.0;
     }
+
+    // Find which palette this color fits best
+    const bestPalette = findBestPalette(color.lab);
 
     return {
       detectedColor: color,
       closestPaletteColor: match.paletteColor,
       distance: Math.round(match.distance * 10) / 10,
       verdict,
-      level
+      level,
+      weight,
+      score,
+      bestPalette
     };
   });
 
-  // Overall verdict
-  const levels = results.map(r => r.level);
+  // Weighted overall score — dominant colors matter more
+  const weightedScore = results.reduce((sum, r) => sum + r.score * r.weight, 0);
+
+  // The dominant color (largest cluster) has strong influence
+  const dominantResult = results[0]; // already sorted by cluster size
+
   let overallVerdict, overallLevel;
 
-  const greatCount = levels.filter(l => l === "great").length;
-  const okCount = levels.filter(l => l === "ok").length;
-  const badCount = levels.filter(l => l === "bad").length;
-  const total = levels.length;
-
-  if (greatCount + okCount === total) {
+  // If the dominant color (>30% of pixels) is bad, the overall should reflect that
+  if (dominantResult.weight > 0.3 && dominantResult.level === "bad") {
+    overallVerdict = "This isn't in your color palette";
+    overallLevel = "bad";
+  } else if (dominantResult.weight > 0.3 && dominantResult.level === "warning") {
+    // Dominant color is off — cap at warning regardless of weighted score
+    if (weightedScore > 0.6) {
+      overallVerdict = "Main color is slightly off your palette";
+      overallLevel = "warning";
+    } else {
+      overallVerdict = "This isn't the best match for your palette";
+      overallLevel = "warning";
+    }
+  } else if (weightedScore >= 0.75) {
     overallVerdict = "This looks great on you!";
     overallLevel = "great";
-  } else if (badCount === 0) {
+  } else if (weightedScore >= 0.5) {
     overallVerdict = "Pretty good — close to your palette";
     overallLevel = "ok";
-  } else if (badCount <= total / 2) {
+  } else if (weightedScore >= 0.25) {
     overallVerdict = "Some colors don't match your palette";
     overallLevel = "warning";
   } else {
@@ -291,5 +494,8 @@ function analyzeColors(dominantColors, palette) {
     overallLevel = "bad";
   }
 
-  return { results, overallVerdict, overallLevel };
+  // Find which palettes this garment suits best overall
+  const bestPalettes = findBestOverallPalette(dominantColors);
+
+  return { results, overallVerdict, overallLevel, weightedScore: Math.round(weightedScore * 100), bestPalettes };
 }
