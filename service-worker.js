@@ -1,4 +1,4 @@
-const CACHE_NAME = 'colormatch-v2';
+const CACHE_NAME = 'colormatch-v3';
 const ASSETS = [
   './',
   './index.html',

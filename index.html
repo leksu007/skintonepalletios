@@ -36,6 +36,14 @@
         </label>
       </div>
 
+      <div class="checkbox-row">
+        <label class="checkbox-label" for="default-calib-check">
+          <input type="checkbox" id="default-calib-check">
+          <span>Use saved white balance calibration</span>
+        </label>
+        <span id="calib-status" class="calib-status">Not calibrated</span>
+      </div>
+
       <div id="palette-preview" class="palette-preview hidden">
         <p class="palette-name" id="palette-name"></p>
         <p class="palette-desc" id="palette-desc"></p>
@@ -52,7 +60,7 @@
 
       <button class="btn btn-exit exit-app-btn">Exit App</button>
 
-      <div class="app-version">v1.6.0 — 2026-03-30</div>
+      <div class="app-version">v1.7.0 — 2026-03-30</div>
     </div>
   </div>
 
@@ -61,7 +69,7 @@
     <div class="camera-wrapper">
       <video id="camera-feed" autoplay playsinline></video>
       <div class="camera-label-bar">
-        <span id="camera-label" class="camera-label"></span>
+        <span id="calib-indicator" class="calib-indicator"></span>
       </div>
       <div class="camera-overlay">
         <div class="camera-guide">
@@ -77,12 +85,10 @@
         <button id="btn-capture" class="btn btn-circle btn-capture" aria-label="Take Photo">
           <div class="capture-inner"></div>
         </button>
-        <button id="btn-switch-camera" class="btn btn-circle btn-secondary" aria-label="Switch Camera">
+        <button id="btn-calibrate" class="btn btn-circle btn-secondary" aria-label="Calibrate White Balance" title="Hold white paper in the guide area, then tap to calibrate">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 16v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/>
-            <polyline points="16 10 20 6 24 10"/>
-            <path d="M4 8V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4"/>
-            <polyline points="8 14 4 18 0 14"/>
+            <circle cx="12" cy="12" r="5"/>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
           </svg>
         </button>
       </div>
@@ -142,6 +148,7 @@
         <button id="btn-use-color" class="btn btn-primary">Analyze This Color</button>
         <button id="btn-reset-sliders" class="btn btn-secondary">Reset Sliders</button>
         <button id="btn-retake" class="btn btn-secondary">Retake Photo</button>
+        <button id="btn-clear-calib" class="btn btn-secondary btn-calib-clear">Clear White Balance</button>
       </div>
     </div>
   </div>

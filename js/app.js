@@ -4,8 +4,7 @@
 
 let selectedPaletteKey = null;
 let cameraStream = null;
-let availableCameras = [];
-let currentCameraIndex = 0;
+let calibrationData = null; // { labOffset: [dL, da, db] }
 
 // --- Screen Navigation ---
 
@@ -40,6 +39,7 @@ function initPaletteSelector() {
   }
 
   const defaultCheck = document.getElementById('default-check');
+  const calibCheck = document.getElementById('default-calib-check');
 
   select.addEventListener('change', () => {
     selectedPaletteKey = select.value;
@@ -58,6 +58,16 @@ function initPaletteSelector() {
     }
   });
 
+  calibCheck.addEventListener('change', () => {
+    if (calibCheck.checked && calibrationData) {
+      localStorage.setItem('defaultCalibration', JSON.stringify(calibrationData));
+    } else {
+      localStorage.removeItem('defaultCalibration');
+      calibrationData = null;
+      updateCalibrationStatus();
+    }
+  });
+
   // Restore default palette
   const saved = localStorage.getItem('defaultPalette');
   if (saved && PALETTES[saved]) {
@@ -66,6 +76,18 @@ function initPaletteSelector() {
     defaultCheck.checked = true;
     showPalettePreview(saved);
     document.getElementById('btn-start').disabled = false;
+  }
+
+  // Restore default calibration
+  const savedCalib = localStorage.getItem('defaultCalibration');
+  if (savedCalib) {
+    try {
+      calibrationData = JSON.parse(savedCalib);
+      calibCheck.checked = true;
+      updateCalibrationStatus();
+    } catch (e) {
+      localStorage.removeItem('defaultCalibration');
+    }
   }
 }
 
@@ -91,55 +113,25 @@ function showPalettePreview(key) {
 
 // --- Camera ---
 
-async function loadCameraList() {
-  try {
-    // Need a temporary stream to trigger permission, then enumerate
-    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
-    tempStream.getTracks().forEach(t => t.stop());
-
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    availableCameras = devices.filter(d => d.kind === 'videoinput');
-
-    // Try to default to a rear/environment camera
-    const rearIdx = availableCameras.findIndex(d =>
-      d.label.toLowerCase().includes('back') ||
-      d.label.toLowerCase().includes('rear') ||
-      d.label.toLowerCase().includes('environment')
-    );
-    if (rearIdx >= 0) currentCameraIndex = rearIdx;
-
-    // Show/hide switch button
-    const switchBtn = document.getElementById('btn-switch-camera');
-    if (switchBtn) {
-      switchBtn.style.display = availableCameras.length > 1 ? '' : 'none';
-    }
-  } catch (e) {
-    availableCameras = [];
-  }
-}
-
 async function startCamera() {
   try {
-    if (availableCameras.length === 0) {
-      await loadCameraList();
-    }
-
-    const constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 } } };
-
-    if (availableCameras.length > 0 && availableCameras[currentCameraIndex]) {
-      constraints.video.deviceId = { exact: availableCameras[currentCameraIndex].deviceId };
-    } else {
-      constraints.video.facingMode = 'environment';
-    }
+    // Always use the standard 1x rear camera
+    const constraints = {
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        // Avoid ultra-wide or telephoto — request ~26mm focal length (standard 1x)
+        zoom: { ideal: 1.0 }
+      }
+    };
 
     cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
 
     const video = document.getElementById('camera-feed');
     video.srcObject = cameraStream;
     showScreen('screen-camera');
-
-    // Show camera label
-    updateCameraLabel();
+    updateCalibrationIndicator();
   } catch (err) {
     if (err.name === 'NotAllowedError') {
       alert('Camera access was denied. Please allow camera access to use this feature.');
@@ -149,25 +141,6 @@ async function startCamera() {
       alert('Could not access camera: ' + err.message);
     }
   }
-}
-
-function updateCameraLabel() {
-  const label = document.getElementById('camera-label');
-  if (!label || availableCameras.length <= 1) {
-    if (label) label.textContent = '';
-    return;
-  }
-  const cam = availableCameras[currentCameraIndex];
-  // Show a short label: "Camera 1 of 3" or the device label if available
-  const name = cam.label ? cam.label.split('(')[0].trim() : `Camera ${currentCameraIndex + 1}`;
-  label.textContent = name;
-}
-
-async function switchCamera() {
-  if (availableCameras.length <= 1) return;
-  currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
-  stopCamera();
-  await startCamera();
 }
 
 function stopCamera() {
@@ -193,6 +166,116 @@ function capturePhoto() {
   return canvas;
 }
 
+// --- White Balance Calibration ---
+
+function calibrateWhiteBalance() {
+  const video = document.getElementById('camera-feed');
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+
+  // Sample the probe area (center 8%)
+  const probeSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.08);
+  const mx = Math.floor((canvas.width - probeSize) / 2);
+  const my = Math.floor((canvas.height - probeSize) / 2);
+  const imageData = ctx.getImageData(mx, my, probeSize, probeSize);
+  const data = imageData.data;
+
+  let sumR = 0, sumG = 0, sumB = 0, count = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    sumR += data[i];
+    sumG += data[i + 1];
+    sumB += data[i + 2];
+    count++;
+  }
+
+  if (count === 0) {
+    alert('Could not read probe area. Try again.');
+    return;
+  }
+
+  const avgR = sumR / count;
+  const avgG = sumG / count;
+  const avgB = sumB / count;
+
+  // Check that the sample is roughly white/light gray (brightness > 120)
+  const brightness = (avgR + avgG + avgB) / 3;
+  if (brightness < 100) {
+    alert('The probe area is too dark. Please point at a white sheet of paper under your current lighting.');
+    return;
+  }
+
+  // Convert sampled white to Lab
+  const whiteLab = rgbToLab(Math.round(avgR), Math.round(avgG), Math.round(avgB));
+
+  // Pure white in Lab = [100, 0, 0]
+  // Correction offset: shift any captured color so this white maps to true white
+  calibrationData = {
+    labOffset: [100 - whiteLab[0], 0 - whiteLab[1], 0 - whiteLab[2]]
+  };
+
+  // If "set as default" is checked, save it
+  const calibCheck = document.getElementById('default-calib-check');
+  if (calibCheck && calibCheck.checked) {
+    localStorage.setItem('defaultCalibration', JSON.stringify(calibrationData));
+  }
+
+  updateCalibrationIndicator();
+  updateCalibrationStatus();
+
+  // Brief visual feedback
+  const indicator = document.getElementById('calib-indicator');
+  if (indicator) {
+    indicator.classList.add('calib-flash');
+    setTimeout(() => indicator.classList.remove('calib-flash'), 600);
+  }
+}
+
+function clearCalibration() {
+  calibrationData = null;
+  const calibCheck = document.getElementById('default-calib-check');
+  if (calibCheck) calibCheck.checked = false;
+  localStorage.removeItem('defaultCalibration');
+  updateCalibrationIndicator();
+  updateCalibrationStatus();
+}
+
+function applyCalibration(lab) {
+  if (!calibrationData || !calibrationData.labOffset) return lab;
+  return [
+    lab[0] + calibrationData.labOffset[0],
+    lab[1] + calibrationData.labOffset[1],
+    lab[2] + calibrationData.labOffset[2]
+  ];
+}
+
+function updateCalibrationIndicator() {
+  const indicator = document.getElementById('calib-indicator');
+  if (!indicator) return;
+  if (calibrationData) {
+    indicator.textContent = 'WB Calibrated';
+    indicator.classList.add('active');
+  } else {
+    indicator.textContent = '';
+    indicator.classList.remove('active');
+  }
+}
+
+function updateCalibrationStatus() {
+  const statusEl = document.getElementById('calib-status');
+  if (!statusEl) return;
+  if (calibrationData) {
+    const o = calibrationData.labOffset;
+    statusEl.textContent = `Active (L${o[0] > 0 ? '+' : ''}${o[0].toFixed(1)}, a${o[1] > 0 ? '+' : ''}${o[1].toFixed(1)}, b${o[2] > 0 ? '+' : ''}${o[2].toFixed(1)})`;
+    statusEl.className = 'calib-status active';
+  } else {
+    statusEl.textContent = 'Not calibrated';
+    statusEl.className = 'calib-status';
+  }
+}
+
 // --- Color Correction Screen ---
 
 let capturedCanvas = null;
@@ -210,11 +293,14 @@ function showColorPicker(canvas) {
   }
 
   detectedDominantColor = allColors[0];
-  baseLab = detectedDominantColor.lab.slice(); // copy
+  // Apply white balance calibration if active
+  baseLab = applyCalibration(detectedDominantColor.lab.slice());
 
-  // Show original color
+  // Show original (raw camera) color and calibrated starting color
   document.getElementById('original-color-preview').style.backgroundColor = detectedDominantColor.hex;
-  document.getElementById('adjusted-color-preview').style.backgroundColor = detectedDominantColor.hex;
+  const calibRgb = labToRgb(baseLab[0], baseLab[1], baseLab[2]);
+  const calibHex = rgbToHex(calibRgb[0], calibRgb[1], calibRgb[2]);
+  document.getElementById('adjusted-color-preview').style.backgroundColor = calibHex;
 
   // Reset sliders
   document.getElementById('slider-temp').value = 0;
@@ -414,7 +500,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-retake').addEventListener('click', startCamera);
 
-  document.getElementById('btn-switch-camera').addEventListener('click', switchCamera);
+  document.getElementById('btn-calibrate').addEventListener('click', calibrateWhiteBalance);
+  document.getElementById('btn-clear-calib').addEventListener('click', clearCalibration);
 
   document.getElementById('btn-retry').addEventListener('click', startCamera);
 
