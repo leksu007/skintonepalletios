@@ -526,7 +526,85 @@ optgroup {
 
 .slider-temp { background: linear-gradient(to right, #4682B4, var(--bg-input), #D2691E); }
 .slider-light { background: linear-gradient(to right, #2a2a2a, var(--bg-input), #e8e8e8); }
-.slider-sat { background: linear-gradient(to right, #808080, var(--bg-input), #ff4757); }
+.slider-sat { background: linear-gradient(to right, #606060, var(--bg-input), #e94560); }
+.slider-hue { background: linear-gradient(to right, #3b82f6, #10b981, var(--bg-input), #f59e0b, #ef4444); }
+
+/* --- WB Toggle --- */
+
+.calib-toggle-row {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 10px 16px;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+}
+
+.calib-toggle-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.calib-toggle-btn {
+  padding: 5px 18px;
+  border: none;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  transition: all 0.2s;
+}
+
+.calib-toggle-btn.active {
+  background: rgba(46, 213, 115, 0.25);
+  color: var(--great);
+}
+
+/* --- Quick Fix --- */
+
+.quick-fix-section {
+  margin: 0 0 20px;
+}
+
+.quick-fix-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 10px;
+}
+
+.quick-fix-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-fix-chip {
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.quick-fix-chip:active {
+  transform: scale(0.95);
+}
+
+.quick-fix-chip.active {
+  background: rgba(233, 69, 96, 0.2);
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
 
 /* --- Results --- */
 

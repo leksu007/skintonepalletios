@@ -60,7 +60,7 @@
 
       <button class="btn btn-exit exit-app-btn">Exit App</button>
 
-      <div class="app-version">v1.7.0 — 2026-03-30</div>
+      <div class="app-version">v1.8.0 — 2026-04-01</div>
     </div>
   </div>
 
@@ -100,8 +100,8 @@
   <div id="screen-color-pick" class="screen">
     <div class="container">
       <div class="header">
-        <h1>Adjust Color</h1>
-        <p class="subtitle">Drag sliders until the color matches what you see</p>
+        <h1>Fix Photo Color</h1>
+        <p class="subtitle">Adjust until it matches the real-life color</p>
       </div>
 
       <div class="color-preview-row">
@@ -120,35 +120,57 @@
         </div>
       </div>
 
+      <div class="calib-toggle-row" id="calib-toggle-row" style="display:none">
+        <span class="calib-toggle-label">WB Correction</span>
+        <button id="btn-toggle-calib" class="calib-toggle-btn active">ON</button>
+      </div>
+
+      <div class="quick-fix-section">
+        <p class="quick-fix-label">Photo looks...</p>
+        <div class="quick-fix-row">
+          <button class="quick-fix-chip" data-fix="washed-out">Too grey</button>
+          <button class="quick-fix-chip" data-fix="too-dark">Too dark</button>
+          <button class="quick-fix-chip" data-fix="too-bright">Too bright</button>
+          <button class="quick-fix-chip" data-fix="too-warm">Too yellow</button>
+          <button class="quick-fix-chip" data-fix="too-cool">Too blue/cold</button>
+        </div>
+      </div>
+
       <div class="slider-group">
         <div class="slider-row">
           <label class="slider-label">
-            <span class="slider-name">Temperature</span>
-            <span class="slider-ends">Cool ↔ Warm</span>
-          </label>
-          <input type="range" id="slider-temp" class="color-slider slider-temp" min="-100" max="100" value="0">
-        </div>
-        <div class="slider-row">
-          <label class="slider-label">
-            <span class="slider-name">Lightness</span>
-            <span class="slider-ends">Dark ↔ Light</span>
+            <span class="slider-name">Brightness</span>
+            <span class="slider-ends">Darker ↔ Lighter</span>
           </label>
           <input type="range" id="slider-light" class="color-slider slider-light" min="-100" max="100" value="0">
         </div>
         <div class="slider-row">
           <label class="slider-label">
-            <span class="slider-name">Saturation</span>
-            <span class="slider-ends">Muted ↔ Vivid</span>
+            <span class="slider-name">Color cast</span>
+            <span class="slider-ends">Cooler ↔ Warmer</span>
+          </label>
+          <input type="range" id="slider-temp" class="color-slider slider-temp" min="-100" max="100" value="0">
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">
+            <span class="slider-name">Vibrancy</span>
+            <span class="slider-ends">Greyer ↔ More vivid</span>
           </label>
           <input type="range" id="slider-sat" class="color-slider slider-sat" min="-100" max="100" value="0">
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">
+            <span class="slider-name">Hue shift</span>
+            <span class="slider-ends">← Rotate color →</span>
+          </label>
+          <input type="range" id="slider-hue" class="color-slider slider-hue" min="-100" max="100" value="0">
         </div>
       </div>
 
       <div class="actions">
         <button id="btn-use-color" class="btn btn-primary">Analyze This Color</button>
-        <button id="btn-reset-sliders" class="btn btn-secondary">Reset Sliders</button>
+        <button id="btn-reset-sliders" class="btn btn-secondary">Reset</button>
         <button id="btn-retake" class="btn btn-secondary">Retake Photo</button>
-        <button id="btn-clear-calib" class="btn btn-secondary btn-calib-clear">Clear White Balance</button>
       </div>
     </div>
   </div>

@@ -280,7 +280,10 @@ function updateCalibrationStatus() {
 
 let capturedCanvas = null;
 let detectedDominantColor = null;
-let baseLab = null; // original Lab values for slider adjustments
+let baseLab = null;           // active base Lab (raw or calibrated)
+let baseLabRaw = null;        // raw camera Lab (no calibration)
+let baseLabCalib = null;      // calibration-applied Lab
+let calibActiveForPhoto = false;
 
 function showColorPicker(canvas) {
   capturedCanvas = canvas;
@@ -293,20 +296,32 @@ function showColorPicker(canvas) {
   }
 
   detectedDominantColor = allColors[0];
-  // Apply white balance calibration if active
-  baseLab = applyCalibration(detectedDominantColor.lab.slice());
+  baseLabRaw = detectedDominantColor.lab.slice();
+  baseLabCalib = applyCalibration(detectedDominantColor.lab.slice());
+  calibActiveForPhoto = !!calibrationData;
+  baseLab = calibActiveForPhoto ? baseLabCalib.slice() : baseLabRaw.slice();
 
-  // Show original (raw camera) color and calibrated starting color
   document.getElementById('original-color-preview').style.backgroundColor = detectedDominantColor.hex;
-  const calibRgb = labToRgb(baseLab[0], baseLab[1], baseLab[2]);
-  const calibHex = rgbToHex(calibRgb[0], calibRgb[1], calibRgb[2]);
-  document.getElementById('adjusted-color-preview').style.backgroundColor = calibHex;
 
-  // Reset sliders
+  // Show/hide WB toggle depending on whether calibration is available
+  const calibToggleRow = document.getElementById('calib-toggle-row');
+  if (calibToggleRow) {
+    calibToggleRow.style.display = calibrationData ? 'flex' : 'none';
+  }
+  const toggleBtn = document.getElementById('btn-toggle-calib');
+  if (toggleBtn) {
+    toggleBtn.textContent = calibActiveForPhoto ? 'ON' : 'OFF';
+    toggleBtn.classList.toggle('active', calibActiveForPhoto);
+  }
+
+  // Reset sliders and quick fixes
   document.getElementById('slider-temp').value = 0;
   document.getElementById('slider-light').value = 0;
   document.getElementById('slider-sat').value = 0;
+  document.getElementById('slider-hue').value = 0;
+  document.querySelectorAll('.quick-fix-chip').forEach(c => c.classList.remove('active'));
 
+  updateColorPreview();
   showScreen('screen-color-pick');
 }
 
@@ -314,30 +329,85 @@ function getAdjustedColor() {
   const tempVal = parseInt(document.getElementById('slider-temp').value);
   const lightVal = parseInt(document.getElementById('slider-light').value);
   const satVal = parseInt(document.getElementById('slider-sat').value);
+  const hueVal = parseInt(document.getElementById('slider-hue').value);
 
   let L = baseLab[0];
   let a = baseLab[1];
   let b = baseLab[2];
 
-  // Lightness: shift L by up to ±25
+  // 1. Brightness: shift L by up to ±25
   L = Math.max(0, Math.min(100, L + lightVal * 0.25));
 
-  // Temperature: warm shifts toward yellow (increase b, slight increase a)
-  // cool shifts toward blue (decrease b, slight decrease a)
+  // 2. Color cast: warm=yellow (+b), cool=blue (-b)
   const tempShift = tempVal * 0.25;
   b = b + tempShift;
   a = a + tempShift * 0.3;
 
-  // Saturation: scale chroma (a and b) up or down
-  const satFactor = 1 + satVal * 0.008; // range: 0.2 to 1.8
-  a = a * satFactor;
-  b = b * satFactor;
+  // 3. Hue rotation — rotates the color angle in Lab a/b plane.
+  //    For near-grey colors, injects minimum chroma so the rotation has effect.
+  if (hueVal !== 0) {
+    let chroma = Math.sqrt(a * a + b * b);
+    const hueShiftRad = hueVal * (Math.PI / 180);
+    // Inject minimum chroma proportional to how much hue is shifted
+    const minChroma = Math.abs(hueVal) * 0.25;
+    chroma = Math.max(chroma, minChroma);
+    const currentHue = Math.atan2(b, a);
+    const newHue = currentHue + hueShiftRad;
+    a = chroma * Math.cos(newHue);
+    b = chroma * Math.sin(newHue);
+  }
+
+  // 4. Vibrancy: additive chroma boost along current hue direction.
+  //    Unlike multiplicative scaling, this works even on near-grey colors.
+  if (satVal !== 0) {
+    const chroma = Math.sqrt(a * a + b * b);
+    const hueAngle = chroma > 0.5 ? Math.atan2(b, a) : 0;
+    const newChroma = Math.max(0, chroma + satVal * 0.3);
+    a = newChroma * Math.cos(hueAngle);
+    b = newChroma * Math.sin(hueAngle);
+  }
 
   const rgb = labToRgb(L, a, b);
   const hex = rgbToHex(rgb[0], rgb[1], rgb[2]);
   const lab = [L, a, b];
 
   return { rgb, hex, lab };
+}
+
+function setCalibForPhoto(active) {
+  calibActiveForPhoto = active;
+  baseLab = active && baseLabCalib ? baseLabCalib.slice() : baseLabRaw.slice();
+  const btn = document.getElementById('btn-toggle-calib');
+  if (btn) {
+    btn.textContent = active ? 'ON' : 'OFF';
+    btn.classList.toggle('active', active);
+  }
+  document.getElementById('slider-temp').value = 0;
+  document.getElementById('slider-light').value = 0;
+  document.getElementById('slider-sat').value = 0;
+  document.getElementById('slider-hue').value = 0;
+  document.querySelectorAll('.quick-fix-chip').forEach(c => c.classList.remove('active'));
+  updateColorPreview();
+}
+
+const quickFixes = {
+  'washed-out': { temp: 0, light: 0, sat: 70, hue: 0 },
+  'too-dark':   { temp: 0, light: 50, sat: 0, hue: 0 },
+  'too-bright': { temp: 0, light: -40, sat: 0, hue: 0 },
+  'too-warm':   { temp: -50, light: 0, sat: 0, hue: 0 },
+  'too-cool':   { temp: 50, light: 0, sat: 0, hue: 0 },
+};
+
+function applyQuickFix(fixKey) {
+  const fix = quickFixes[fixKey];
+  if (!fix) return;
+  document.getElementById('slider-temp').value = fix.temp;
+  document.getElementById('slider-light').value = fix.light;
+  document.getElementById('slider-sat').value = fix.sat;
+  document.getElementById('slider-hue').value = fix.hue;
+  document.querySelectorAll('.quick-fix-chip').forEach(c => c.classList.remove('active'));
+  document.querySelector(`[data-fix="${fixKey}"]`).classList.add('active');
+  updateColorPreview();
 }
 
 function updateColorPreview() {
@@ -485,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Color correction sliders — update preview in real-time
-  ['slider-temp', 'slider-light', 'slider-sat'].forEach(id => {
+  ['slider-temp', 'slider-light', 'slider-sat', 'slider-hue'].forEach(id => {
     document.getElementById(id).addEventListener('input', updateColorPreview);
   });
 
@@ -495,13 +565,22 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('slider-temp').value = 0;
     document.getElementById('slider-light').value = 0;
     document.getElementById('slider-sat').value = 0;
+    document.getElementById('slider-hue').value = 0;
+    document.querySelectorAll('.quick-fix-chip').forEach(c => c.classList.remove('active'));
     updateColorPreview();
   });
 
   document.getElementById('btn-retake').addEventListener('click', startCamera);
 
   document.getElementById('btn-calibrate').addEventListener('click', calibrateWhiteBalance);
-  document.getElementById('btn-clear-calib').addEventListener('click', clearCalibration);
+
+  document.getElementById('btn-toggle-calib').addEventListener('click', () => {
+    setCalibForPhoto(!calibActiveForPhoto);
+  });
+
+  document.querySelectorAll('.quick-fix-chip').forEach(chip => {
+    chip.addEventListener('click', () => applyQuickFix(chip.dataset.fix));
+  });
 
   document.getElementById('btn-retry').addEventListener('click', startCamera);
 
